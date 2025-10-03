@@ -201,12 +201,12 @@ class UIComponents:
             if uploaded_file:
                 csv_tables = self.data_ops.process_uploaded_csv(uploaded_file)
                 if csv_tables:
-                    # Update the text area
+                    # Update session state and return CSV tables directly
                     st.session_state.selected_tables = csv_tables
                     st.success(f"✅ Loaded {len(csv_tables)} tables from CSV")
-                    # Note: Removed st.rerun() to prevent scroll-to-top - changes will show on next interaction
+                    return csv_tables
 
-        # Parse and validate tables
+        # Parse and validate tables from text input
         tables = self._parse_and_store_tables(table_names_input)
 
         return tables

@@ -503,71 +503,71 @@ class JobManager:
     #         # For sync jobs, create a similar DDL sync job
     #         return self._create_sync_job_only(job_name, current_user)
 
-    def _create_sync_job_only(self, job_name: str, current_user: str) -> int:
-        """Create a DDL sync job using the proven approach (create only, don't run)"""
-        logger.info("Creating sync job: %s", job_name)
+    # def _create_sync_job_only(self, job_name: str, current_user: str) -> int:
+    #     """Create a DDL sync job using the proven approach (create only, don't run)"""
+    #     logger.info("Creating sync job: %s", job_name)
 
-        try:
-            # Use the sync notebook path - reuse existing logic where possible
-            app_name = AppConfig.get_app_name()
-            bundle_target = AppConfig.get_bundle_target()
-            use_shared = st.session_state.config.get(
-                "use_shared_bundle_location", False
-            )
+    #     try:
+    #         # Use the sync notebook path - reuse existing logic where possible
+    #         app_name = AppConfig.get_app_name()
+    #         bundle_target = AppConfig.get_bundle_target()
+    #         use_shared = st.session_state.config.get(
+    #             "use_shared_bundle_location", False
+    #         )
 
-            notebook_path = UserContextManager.get_notebook_path(
-                notebook_name="sync_reviewed_ddl",
-                bundle_name=app_name,
-                bundle_target=bundle_target,
-                use_shared=use_shared,
-            )
+    #         notebook_path = UserContextManager.get_notebook_path(
+    #             notebook_name="sync_reviewed_ddl",
+    #             bundle_name=app_name,
+    #             bundle_target=bundle_target,
+    #             use_shared=use_shared,
+    #         )
 
-            # Create job
-            job = self.workspace_client.jobs.create(
-                name=job_name,
-                tasks=[
-                    jobs.Task(
-                        task_key="sync_reviewed_ddl",
-                        new_cluster=jobs.ClusterSpec(
-                            spark_version="15.4.x-cpu-ml-scala2.12",
-                            node_type_id="Standard_D3_v2",
-                            num_workers=1,
-                        ),
-                        notebook_task=jobs.NotebookTask(
-                            notebook_path=notebook_path,
-                            base_parameters={
-                                "reviewed_file_name": "{{job.parameters.reviewed_file_name}}",
-                                "mode": "{{job.parameters.mode}}",
-                                "current_user_override": "{{job.parameters.current_user_override}}",
-                            },
-                        ),
-                        libraries=[jobs.Library(whl="../../dist/*.whl")],
-                    )
-                ],
-                parameters=[
-                    jobs.JobParameterDefinition(name="reviewed_file_name", default=""),
-                    jobs.JobParameterDefinition(name="mode", default="comment"),
-                    jobs.JobParameterDefinition(
-                        name="current_user_override", default=""
-                    ),
-                ],
-                email_notifications=jobs.JobEmailNotifications(
-                    on_failure=[current_user], on_success=[current_user]
-                ),
-                max_concurrent_runs=10,
-                queue=jobs.QueueSettings(enabled=True),
-            )
+    #         # Create job
+    #         job = self.workspace_client.jobs.create(
+    #             name=job_name,
+    #             tasks=[
+    #                 jobs.Task(
+    #                     task_key="sync_reviewed_ddl",
+    #                     new_cluster=jobs.ClusterSpec(
+    #                         spark_version="15.4.x-cpu-ml-scala2.12",
+    #                         node_type_id="Standard_D3_v2",
+    #                         num_workers=1,
+    #                     ),
+    #                     notebook_task=jobs.NotebookTask(
+    #                         notebook_path=notebook_path,
+    #                         base_parameters={
+    #                             "reviewed_file_name": "{{job.parameters.reviewed_file_name}}",
+    #                             "mode": "{{job.parameters.mode}}",
+    #                             "current_user_override": "{{job.parameters.current_user_override}}",
+    #                         },
+    #                     ),
+    #                     libraries=[jobs.Library(whl="../../dist/*.whl")],
+    #                 )
+    #             ],
+    #             parameters=[
+    #                 jobs.JobParameterDefinition(name="reviewed_file_name", default=""),
+    #                 jobs.JobParameterDefinition(name="mode", default="comment"),
+    #                 jobs.JobParameterDefinition(
+    #                     name="current_user_override", default=""
+    #                 ),
+    #             ],
+    #             email_notifications=jobs.JobEmailNotifications(
+    #                 on_failure=[current_user], on_success=[current_user]
+    #             ),
+    #             max_concurrent_runs=10,
+    #             queue=jobs.QueueSettings(enabled=True),
+    #         )
 
-            logger.info(f"Sync job created successfully - job_id: {job.job_id}")
+    #         logger.info(f"Sync job created successfully - job_id: {job.job_id}")
 
-            # Set permissions
-            self._update_job_permissions(job.job_id, current_user)
+    #         # Set permissions
+    #         self._update_job_permissions(job.job_id, current_user)
 
-            return job.job_id
+    #         return job.job_id
 
-        except Exception as e:
-            logger.error(f"Failed to create sync job: {e}")
-            raise ValueError(f"Cannot create sync job: {e}")
+    #     except Exception as e:
+    #         logger.error(f"Failed to create sync job: {e}")
+    #         raise ValueError(f"Cannot create sync job: {e}")
 
     def _update_job_permissions(self, job_id: int, current_user: str):
         """Update job permissions to include current app user without removing existing permissions"""

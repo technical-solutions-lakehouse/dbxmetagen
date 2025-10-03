@@ -1,9 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # GenAI-Assisted Metadata Utility (a.k.a `dbxmetagen`)
-
 # COMMAND ----------
-
 # MAGIC %md
 # MAGIC #`dbxmetagen` Overview
 # MAGIC ### This is a utility to help generate high quality descriptions for tables and columns to enhance enterprise search and data governance, identify and classify PI, improve Databricks Genie performance for Text-2-SQL, and generally help curate a high quality metadata layer and data dictionary for enterprise data.
@@ -14,93 +12,34 @@
 # MAGIC
 # MAGIC ###Disclaimer
 # MAGIC AI generated comments are not always accurate and comment DDLs should be reviewed prior to modifying your tables. Databricks strongly recommends human review of AI-generated comments to check for inaccuracies. While the model has been guided to avoids generating harmful or inappropriate descriptions, you can mitigate this risk by setting up [AI Guardrails](https://docs.databricks.com/en/ai-gateway/index.html#ai-guardrails) in the AI Gateway where you connect your LLM.
-
 # COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Library installs
-
 # COMMAND ----------
-
 # MAGIC %pip install -r ../requirements.txt
 # MAGIC dbutils.library.restartPython()
-
 # COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Library imports
-
 # COMMAND ----------
-
 import sys
 
 sys.path.append("../")
-
 # COMMAND ----------
-
-import os
-import json
-from src.dbxmetagen.databricks_utils import (
-    setup_databricks_environment,
-    get_job_context,
-)
 from src.dbxmetagen.main import main
+from src.dbxmetagen.databricks_utils import (
+    setup_widgets,
+    setup_notebook_variables,
+)
 
 # COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Set up widgets and environment
-
 # COMMAND ----------
-
-dbutils.widgets.dropdown("cleanup_control_table", "false", ["true", "false"])
-dbutils.widgets.dropdown("mode", "comment", ["comment", "pi"])
-dbutils.widgets.text("env", "")
-dbutils.widgets.text("catalog_name", "")
-dbutils.widgets.text("host_name", "")
-dbutils.widgets.text("table_names", "")
-dbutils.widgets.text("current_user", "")
-
+setup_widgets(dbutils)
 # COMMAND ----------
-
 # Get widget values and set up environment
-table_names = dbutils.widgets.get("table_names")
-catalog_name = dbutils.widgets.get("catalog_name")
-host_name = dbutils.widgets.get("host_name")
-mode = dbutils.widgets.get("mode")
-env = dbutils.widgets.get("env")
-cleanup_control_table = dbutils.widgets.get("cleanup_control_table")
-current_user_param = dbutils.widgets.get("current_user")
-
-# Set up Databricks environment variables and get current user
-detected_user = setup_databricks_environment(dbutils)
-if not host_name:
-    host_name = os.environ.get("DATABRICKS_HOST")
-print("host_name", host_name)
-print("DATABRICKS_HOST", os.environ.get("DATABRICKS_HOST"))
-
-# Use parameter if provided, otherwise use detected user
-if current_user_param and current_user_param.strip():
-    current_user = current_user_param.strip()
-    print(f"Using current_user parameter: {current_user}")
-else:
-    current_user = detected_user
-    print(f"Using detected current_user: {current_user}")
-
-# Get job context if running in a job
-job_id = get_job_context(dbutils)
-
-notebook_variables = {
-    "catalog_name": catalog_name,
-    "host_name": host_name,
-    "table_names": table_names,
-    "mode": mode,
-    "env": env,
-    "current_user": current_user,
-    "cleanup_control_table": cleanup_control_table,
-    "job_id": job_id,
-}
-
 # COMMAND ----------
-
+notebook_variables = setup_notebook_variables(dbutils)
+# COMMAND ----------
 main(notebook_variables)

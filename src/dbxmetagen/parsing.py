@@ -24,10 +24,9 @@ def cleanse_sql_comment(comment: str) -> str:
     Returns:
         str: The cleansed comment string.
     """
-    if comment is None:
+    if not comment:
         return comment
 
-    # comment = re.sub(r"(?<!')'(?!')", "''", comment)
     comment = comment.replace('""', "'")
     comment = comment.replace('"', "'")
 

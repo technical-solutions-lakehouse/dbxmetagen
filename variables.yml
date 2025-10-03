@@ -97,15 +97,14 @@ variables:
       ###
       To identify these types:
       ###
-      PII: Look for column names or data containing personal details like 'full_name', 'address', 'ssn', 'email', or 'phone_number'.
-      PHI: Search for health-related terms in column names or data, such as 'medical_record_number', 'diagnosis', 'treatment_date', or any of the 18 HIPAA identifiers.
+      PII: Look for column names or data containing personal details like 'full_name', 'address', 'ssn', 'email', or 'phone_number', geo subdivisions smaller than a state, dates that relate to an individual such as birth date, medical record number (MRN), URLs, Certificate or license numbers, account numbers, VIN or license plate numbers, biometric identifiers, face photography, or unique identifying number characteristic or code.
+      PHI: Search for health-related terms in column names or data, such as 'medical_record_number', 'diagnosis', 'treatment_date', or any of the 18 HIPAA identifiers. If a column ONLY has medical information with absolutely no identifying information, then it is not PHI. It should be classified as medical information at the column level to allow table-level PHI to be evaluated.
       PCI: Identify columns or data with payment card-related terms like 'card_number', 'expiration_date', 'cvv', or 'cardholder_name'.
-      Non-PII/PHI/PCI: Look for general, non-identifying information like 'zip_code' (without other identifiers), 'age_group', or 'product_category'.
+      Non-PII/PHI/PCI: Look for general, non-identifying information like 'state', 'country', 'age_group', or 'product_category'. Anything smaller than state is generally considered PII.
       ###
       Tables with PII vs columns with PII:
       ###
       If a column has only PII, then it should be considered only PII, even if other columns in the table have medical information in them. A specific example of this is that if a column only contains name, or address, then it should be marked as pii, not as phi. However, the column containing medical information would be considered PHI because it pertains to the health status, provision of health care, or payment for health care that can be linked to an individual.
-
       If a table has columns with both PII and PHI, or with PII and medical information, then the table itself has PHI.
   allow_manual_override:
     description: Whether to allow manual overrides to fields. manual override csv allows overrides to be specified in a CSV.

@@ -1,17 +1,12 @@
-import logging
+"""Processing utilities shared among modules."""
+
 import os
 import re
-import json
-import random
-import time
 from abc import ABC
 from datetime import datetime
-from typing import List, Dict, Any, Literal, Tuple
+from typing import List, Dict, Any, Tuple
 import traceback
-
-import csv
-from shutil import copyfile
-import shutil
+import logging
 import mlflow
 import nest_asyncio
 import pandas as pd
@@ -36,13 +31,11 @@ from pyspark.sql.functions import (
     expr,
     split_part,
 )
-from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StructType,
     StructField,
     StringType,
     TimestampType,
-    IntegerType,
     FloatType,
     DoubleType,
 )
@@ -79,7 +72,6 @@ from src.dbxmetagen.metadata_generator import (
 )
 from src.dbxmetagen.overrides import (
     override_metadata_from_csv,
-    apply_overrides_with_loop,
     apply_overrides_with_joins,
     build_condition,
     get_join_conditions,
@@ -112,11 +104,15 @@ logger = logging.getLogger(__name__)
 
 
 class DDLGenerator(ABC):
+    """DDLGenerator class."""
+
     def __init__(self):
         pass
 
 
 class Input(BaseModel):
+    """Input class."""
+
     ### Currently not implemented.
     model_config = ConfigDict(extra="forbid")
 
@@ -124,6 +120,7 @@ class Input(BaseModel):
 
     @classmethod
     def from_df(cls, df: DataFrame) -> Dict[str, Any]:
+        """From DataFrame class."""
         return {
             "table_name": f"{catalog_name}.{schema_name}.{table_name}",
             "column_contents": cls.df.toPandas().to_dict(orient="list"),
@@ -192,6 +189,7 @@ def chunk_df(df: DataFrame, columns_per_call: int = 5) -> List[DataFrame]:
 
 
 def get_extended_metadata_for_column(config, table_name, column_name):
+    """Get extended metadata for a column."""
     spark = SparkSession.builder.getOrCreate()
     query = f"""DESCRIBE EXTENDED {config.catalog_name}.{config.schema_name}.{table_name} `{column_name}`;"""
     return spark.sql(query)
@@ -884,7 +882,6 @@ def _export_table_to_tsv(df, config):
         date = datetime.now().strftime("%Y%m%d")
         if not hasattr(config, "log_timestamp") or not config.log_timestamp:
             config.log_timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        timestamp = config.log_timestamp
 
         filename = f"review_metadata_{config.mode}_{config.log_timestamp}.tsv"
         local_path = f"/local_disk0/tmp/{filename}"
@@ -1399,9 +1396,10 @@ def create_and_persist_ddl(
     """
     print("Running create and persist ddl...")
     current_user = get_current_user()
+    current_user_sanitized = sanitize_user_identifier(current_user)
     current_date = datetime.now().strftime("%Y%m%d")
     if config.volume_name:
-        base_path = f"/Volumes/{config.catalog_name}/{config.schema_name}/{config.volume_name}/{current_user}/{current_date}"
+        base_path = f"/Volumes/{config.catalog_name}/{config.schema_name}/{config.volume_name}/{current_user_sanitized}/{current_date}"
         table_df = df[f"{config.mode}_table_df"]
         table_df = populate_log_table(table_df, config, current_user, base_path)
         modified_path = re.sub(r"[^\w\s/]", "_", base_path)

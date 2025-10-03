@@ -1,3 +1,5 @@
+"""Entry point to dbxmetagen generate metadata."""
+
 import os
 from pyspark.sql import SparkSession
 from src.dbxmetagen.error_handling import validate_csv
@@ -7,16 +9,14 @@ from src.dbxmetagen.processing import (
     setup_queue,
     upsert_table_names_to_control_table,
     generate_and_persist_metadata,
-    get_generated_metadata,
-    get_generated_metadata_data_aware,
     get_control_table,
 )
-from src.dbxmetagen.user_utils import sanitize_user_identifier
 from src.dbxmetagen.config import MetadataConfig
 from src.dbxmetagen.deterministic_pi import ensure_spacy_model
 
 
 def main(kwargs):
+    """Main function to generate metadata."""
     spark = SparkSession.builder.getOrCreate()
 
     # Get Spark version in a serverless-compatible way

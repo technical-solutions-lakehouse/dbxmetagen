@@ -9,7 +9,6 @@ from presidio_analyzer import (
     Pattern,
 )
 import spacy
-from spacy.cli import download
 from datetime import datetime
 
 from src.dbxmetagen.config import MetadataConfig
@@ -186,13 +185,15 @@ def process_table(
 
 def ensure_spacy_model(model_name: str = "en_core_web_lg"):
     """
-    Ensure the specified spaCy model is installed and loaded. By default using the designated english core.
+    Load pre-installed spaCy model. Model should be installed via requirements.txt.
     """
     try:
         return spacy.load(model_name)
     except OSError:
-        download(model_name)
-        return spacy.load(model_name)
+        raise RuntimeError(
+            f"spaCy model '{model_name}' not found. "
+            f"Ensure it's installed via requirements.txt or run: python -m spacy download {model_name}"
+        )
 
 
 def detect_pi(config, input_data: Dict[str, Any]) -> str:
