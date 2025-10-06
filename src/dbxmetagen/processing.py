@@ -79,22 +79,6 @@ from src.dbxmetagen.overrides import (
 from src.dbxmetagen.user_utils import sanitize_user_identifier, get_current_user
 
 
-def debug_print(message: str, config=None):
-    """Print debug messages only when debug_mode is enabled"""
-    debug_enabled = False
-
-    if config and hasattr(config, "debug_mode"):
-        debug_enabled = config.debug_mode
-    elif config and hasattr(config, "__dict__") and "debug_mode" in config.__dict__:
-        debug_enabled = config.__dict__["debug_mode"]
-    else:
-        # Fallback: check environment variable
-        debug_enabled = os.getenv("DEBUG", "false").lower() == "true"
-
-    if debug_enabled:
-        print(message)
-
-
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s",
@@ -652,10 +636,6 @@ def df_column_to_excel_file(
 def populate_log_table(df, config, current_user, base_path):
     # For serverless compatibility, ensure consistent data types without forcing string conversion
     # This maintains compatibility with existing table schemas
-    debug_print(f"[DEBUG] populate_log_table called for mode: {config.mode}", config)
-    debug_print(
-        f"[DEBUG] Input df count before populate_log_table: {df.count()}", config
-    )
 
     # CRITICAL FIX: Explicitly cast all literal columns for serverless compatibility
     result_df = (
@@ -668,23 +648,11 @@ def populate_log_table(df, config, current_user, base_path):
         .withColumn("status", lit("No Volume specified...").cast("string"))
     )
 
-    debug_print(f"[DEBUG] populate_log_table completed", config)
-    debug_print(
-        f"[DEBUG] Result df count after populate_log_table: {result_df.count()}", config
-    )
-
     # CRITICAL SERVERLESS FIX: Ensure column_content stays as string after adding log columns
     if config.mode == "comment" and "column_content" in result_df.columns:
-        debug_print(
-            f"[DEBUG] Re-casting column_content to string after populate_log_table",
-            config,
-        )
         result_df = result_df.withColumn(
             "column_content", col("column_content").cast("string")
         )
-        debug_print(f"[DEBUG] Final schema after re-casting:", config)
-        if config and getattr(config, "debug_mode", False):
-            result_df.printSchema()
 
     return result_df
 
@@ -1507,11 +1475,6 @@ def create_and_persist_ddl(
 
             # Handle union with potential None DataFrames
             if table_df is not None and column_df is not None:
-                print(f"[DEBUG] About to union table_df and column_df for PI mode")
-                print(f"[DEBUG] table_df schema:")
-                table_df.printSchema()
-                print(f"[DEBUG] column_df schema:")
-                column_df.printSchema()
 
                 # CRITICAL FIX: Ensure explicit column ordering before union for serverless
                 # This prevents Spark Connect from doing implicit casting
@@ -1704,23 +1667,6 @@ def check_token_length_against_num_words(prompt: str, config: MetadataConfig):
         )
     else:
         return num_words
-
-
-def call_registered_model(config: MetadataConfig):
-    """
-    Calls a registered model in UC rather than a foundational model endpoint. Not yet used.
-    """
-    _ = None
-    model_name = config.registered_model_name
-    model_version = config.registered_model_version
-    full_model_name = None
-    model = mlflow.pyfunc.load_model(model_name)
-    prediction = model.predict()
-    return prediction, _
-
-
-def choose_registered_model(config, df, full_table_name):
-    """Will be implemented."""
 
 
 def review_and_generate_metadata(
@@ -2184,13 +2130,6 @@ def setup_ddl(config: MetadataConfig) -> None:
             f"CREATE SCHEMA IF NOT EXISTS {config.catalog_name}.{config.schema_name};"
         )
     volume_sql = f"CREATE VOLUME IF NOT EXISTS {config.catalog_name}.{config.schema_name}.{config.volume_name};"
-    debug_print(f"DEBUG: About to execute volume SQL: {volume_sql}", config)
-    debug_print(f"DEBUG: catalog_name = '{config.catalog_name}'", config)
-    debug_print(f"DEBUG: schema_name = '{config.schema_name}'", config)
-    debug_print(f"DEBUG: volume_name = '{config.volume_name}'", config)
-    debug_print(
-        f"DEBUG: current_user = '{getattr(config, 'current_user', 'NOT_SET')}'", config
-    )
 
     if config.volume_name:
         spark.sql(volume_sql)

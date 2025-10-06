@@ -16,34 +16,82 @@ from src.dbxmetagen.user_utils import sanitize_user_identifier
 
 
 def get_analyzer_engine(add_pci: bool = True, add_phi: bool = True) -> AnalyzerEngine:
-    """
-    Initialize Presidio AnalyzerEngine, optionally adding PCI/PHI recognizers.
-    """
+    """Initialize Presidio AnalyzerEngine with PCI/PHI recognizers."""
     analyzer = AnalyzerEngine()
+
     if add_pci:
-        # TODO: Need to build a library of specific recognizers for PCI.
+        # PCI patterns for financial data
         pci_patterns = [
+            Pattern(name="credit_card", regex=r"\b(?:\d[ -]*?){13,16}\b", score=0.8),
+            Pattern(name="cvv", regex=r"\b\d{3,4}\b", score=0.6),
             Pattern(
-                name="credit_card_pattern", regex=r"\b(?:\d[ -]*?){13,16}\b", score=0.8
-            )
+                name="expiry_date",
+                regex=r"\b(0[1-9]|1[0-2])[\/\-](\d{2}|\d{4})\b",
+                score=0.7,
+            ),
+            Pattern(name="iban", regex=r"\b[A-Z]{2}\d{2}[A-Z0-9]{1,30}\b", score=0.8),
+            Pattern(
+                name="swift", regex=r"\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\b", score=0.8
+            ),
+            Pattern(name="bank_account", regex=r"\b\d{8,17}\b", score=0.6),
         ]
         pci_recognizer = PatternRecognizer(
             supported_entity="CREDIT_CARD",
             patterns=pci_patterns,
-            context=["credit", "card", "visa", "mastercard", "amex"],
+            context=[
+                "credit",
+                "card",
+                "visa",
+                "mastercard",
+                "amex",
+                "payment",
+                "cvv",
+                "expiry",
+                "bank",
+                "account",
+            ],
         )
         analyzer.registry.add_recognizer(pci_recognizer)
+
     if add_phi:
-        # TODO: Need to build a library of recognizers for medical information and PHI.
-        mrn_pattern = Pattern(
-            name="mrn_pattern", regex=r"\bMRN[:\s]*\d{6,10}\b", score=0.8
-        )
+        # PHI patterns for medical data
+        phi_patterns = [
+            Pattern(name="mrn", regex=r"\bMRN[:\s]*\d{6,10}\b", score=0.8),
+            Pattern(
+                name="patient_id",
+                regex=r"\b(?:PT|PAT|PATIENT)[:\s-]*\d{6,10}\b",
+                score=0.8,
+            ),
+            Pattern(name="health_insurance", regex=r"\b[A-Z]{3}\d{9,12}\b", score=0.7),
+            Pattern(
+                name="medical_license",
+                regex=r"\b(?:MD|DO|NP|RN)[:\s-]*\d{6,10}\b",
+                score=0.7,
+            ),
+            Pattern(
+                name="diagnosis_code", regex=r"\b[A-Z]\d{2}\.?\d{1,2}\b", score=0.6
+            ),
+            Pattern(
+                name="prescription_number", regex=r"\bRX[:\s-]*\d{6,12}\b", score=0.7
+            ),
+        ]
         phi_recognizer = PatternRecognizer(
             supported_entity="MEDICAL_RECORD_NUMBER",
-            patterns=[mrn_pattern],
-            context=["mrn", "medical", "record"],
+            patterns=phi_patterns,
+            context=[
+                "mrn",
+                "medical",
+                "record",
+                "patient",
+                "health",
+                "insurance",
+                "diagnosis",
+                "prescription",
+                "doctor",
+            ],
         )
         analyzer.registry.add_recognizer(phi_recognizer)
+
     return analyzer
 
 
@@ -89,15 +137,11 @@ def classify_column(
             "CREDIT_CARD",
             "IBAN_CODE",
             "CRYPTO",
-        ],
-        "US": [
             "US_SSN",
             "US_BANK_NUMBER",
             "US_DRIVER_LICENSE",
             "US_PASSPORT",
             "US_ITIN",
-        ],
-        "International": [
             "UK_NHS",
             "UK_NINO",
             "IT_FISCAL_CODE",
@@ -124,9 +168,36 @@ def classify_column(
         "PHI": [
             "MEDICAL_LICENSE",
             "MEDICAL_RECORD_NUMBER",
-            "HEALTH_INSURANCE_NUMBER" "PATIENT_NAME",
+            "MRN",
+            "HEALTH_INSURANCE_NUMBER",
+            "PATIENT_NAME",
+            "PATIENT_ID",
+            "PATIENT_MRN",
+            "PATIENT_SSN",
+            "PATIENT_DOB",
+            "PATIENT_GENDER",
+            "PATIENT_RACE",
+            "PATIENT_ETHNICITY",
+            "PATIENT_ADDRESS",
+            "PATIENT_PHONE",
+            "PATIENT_EMAIL",
+            "PATIENT_ZIP",
         ],
-        "PCI": ["CREDIT_CARD", "US_BANK_NUMBER", "IBAN_CODE"],
+        "PCI": [
+            "CREDIT_CARD",
+            "US_BANK_NUMBER",
+            "IBAN_CODE",
+            "CREDIT_CARD_NUMBER",
+            "CREDIT_CARD_EXPIRATION_DATE",
+            "CREDIT_CARD_CVV",
+            "CREDIT_CARD_HOLDER_NAME",
+            "CREDIT_CARD_ISSUER",
+            "CREDIT_CARD_TYPE",
+            "CREDIT_CARD_NETWORK",
+            "SWIFT_CODE",
+            "ABA_NUMBER",
+            "BANK_ACCOUNT_NUMBER",
+        ],
     }
     detected_types = set()
     detected_entities = set()
