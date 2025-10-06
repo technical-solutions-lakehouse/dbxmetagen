@@ -10,61 +10,62 @@ class MetadataConfig:
     """Configuration class for dbxmetagen."""
 
     # Dynamic attributes loaded from YAML - defined for type checking
-    disable_medical_information_value: str
-    mode: str
-    allow_data: bool
-    yaml_file_path: str
-    yaml_variable_names: list
-    host: str
-    env: str
-    catalog_name: str
-    schema_name: str
-    catalog_tokenizable: bool
-    format_catalog: bool
-    model: str
-    chat_completion_type: str
-    custom_endpoint_url: str
-    custom_endpoint_secret_scope: str
-    custom_endpoint_secret_key: str
-    registered_model_name: str
-    model_type: str
-    volume_name: str
-    table_names_source: str
-    source_file_path: str
-    control_table: str
-    apply_ddl: bool
-    ddl_output_format: str
-    allow_data_in_comments: bool
-    dry_run: bool
-    pi_classification_rules: str
-    allow_manual_override: bool
-    override_csv_path: str
-    tag_none_fields: bool
-    pi_column_field_names: str
-    max_prompt_length: int
-    columns_per_call: int
-    sample_size: int
-    max_tokens: int
-    word_limit_per_cell: int
-    limit_prompt_based_on_cell_len: bool
-    temperature: float
-    add_metadata: bool
-    acro_content: str
-    include_datatype_from_metadata: bool
-    include_possible_data_fields_in_metadata: bool
-    review_input_file_type: str
-    review_output_file_type: str
-    include_deterministic_pi: bool
-    reviewable_output_format: str
-    spacy_model_names: list
-    include_existing_table_comment: bool
-    column_with_reviewed_ddl: str
-    current_user: str
-    use_protected_classification_for_table: bool
+    # disable_medical_information_value: str
+    # mode: str
+    # allow_data: bool
+    # yaml_file_path: str
+    # yaml_variable_names: list
+    # host: str
+    # env: str
+    # catalog_name: str
+    # schema_name: str
+    # catalog_tokenizable: bool
+    # format_catalog: bool
+    # model: str
+    # chat_completion_type: str
+    # custom_endpoint_url: str
+    # custom_endpoint_secret_scope: str
+    # custom_endpoint_secret_key: str
+    # registered_model_name: str
+    # model_type: str
+    # volume_name: str
+    # table_names_source: str
+    # source_file_path: str
+    # control_table: str
+    # apply_ddl: bool
+    # ddl_output_format: str
+    # allow_data_in_comments: bool
+    # dry_run: bool
+    # pi_classification_rules: str
+    # allow_manual_override: bool
+    # override_csv_path: str
+    # tag_none_fields: bool
+    # pi_column_field_names: str
+    # max_prompt_length: int
+    # columns_per_call: int
+    # sample_size: int
+    # max_tokens: int
+    # word_limit_per_cell: int
+    # limit_prompt_based_on_cell_len: bool
+    # temperature: float
+    # add_metadata: bool
+    # acro_content: str
+    # include_datatype_from_metadata: bool
+    # include_possible_data_fields_in_metadata: bool
+    # review_input_file_type: str
+    # review_output_file_type: str
+    # include_deterministic_pi: bool
+    # reviewable_output_format: str
+    # spacy_model_names: str
+    # include_existing_table_comment: bool
+    # column_with_reviewed_ddl: str
+    # current_user: str
+    # use_protected_classification_for_table: bool
     ACRO_CONTENT = {}
     SETUP_PARAMS = {
         "yaml_file_path": "../variables.yml",
         "yaml_variable_names": [
+            "env",
             "host",
             "catalog_name",
             "schema_name",
@@ -113,6 +114,11 @@ class MetadataConfig:
             "current_user",
             "use_protected_classification_for_table",
         ],
+        "yaml_advanced_file_path": "../variables.advanced.yml",
+        "yaml_advanced_variable_names": [
+            "enable_benchmarking",
+            "benchmark_table_name",
+        ],
     }
     MODEL_PARAMS = {}
 
@@ -133,17 +139,40 @@ class MetadataConfig:
         for key, value in yaml_variables.items():
             setattr(self, key, value)
 
+        # Load advanced YAML variables
+        yaml_advanced_variables = self.load_yaml(
+            file_path=self.yaml_advanced_file_path,
+            variable_names=self.yaml_advanced_variable_names,
+        )
+        for key, value in yaml_advanced_variables.items():
+            setattr(self, key, value)
+
         # Then override with any passed parameters
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.instantiate_environments()
+        # self.instantiate_environments()
 
         if not self.allow_data:
             self.allow_data_in_comments = False
             self.sample_size = 0
             self.filter_data_from_metadata = True
             self.include_possible_data_fields_in_metadata = False
+
+        self.columns_per_call = int(self.columns_per_call)
+        self.sample_size = int(self.sample_size)
+        self.allow_data = bool(self.allow_data)
+        self.allow_data_in_comments = bool(self.allow_data_in_comments)
+        self.include_possible_data_fields_in_metadata = bool(
+            self.include_possible_data_fields_in_metadata
+        )
+
+        print("\n\n\n")
+        print(f"Columns per call: {type(self.columns_per_call)}")
+        print(f"Sample size: {type(self.sample_size)}")
+        print(f"Allow data: {type(self.allow_data)}")
+        print(f"Allow data in comments: {type(self.allow_data_in_comments)}")
+        print("\n\n\n")
 
     def get_temp_metadata_log_table_name(self) -> str:
         """
@@ -158,22 +187,34 @@ class MetadataConfig:
         table_name = f"{self.catalog_name}.{self.schema_name}.{self.mode}_temp_metadata_generation_log_{current_user}_{self.log_timestamp}"
         return table_name
 
-    def load_yaml(self):
+    def load_yaml(self, file_path=None, variable_names=None):
         """Load YAML file."""
-        with open(self.yaml_file_path, "r") as file:
-            variables = yaml.safe_load(file)
-        selected_variables = {
-            key: variables["variables"][key]["default"]
-            for key in self.yaml_variable_names
-            if key in variables["variables"]
-        }
-        return selected_variables
+        file_path = file_path or self.yaml_file_path
+        variable_names = variable_names or self.yaml_variable_names
 
-    def instantiate_environments(self):
-        """Instantiate environments."""
         try:
-            self.base_url = self.host
-        except:
-            raise Exception(
-                f"Environment {self.env} does not match any provided host in variables.yml."
-            )
+            with open(file_path, "r") as file:
+                variables = yaml.safe_load(file)
+            if not variables or "variables" not in variables:
+                return {}
+            selected_variables = {
+                key: variables["variables"][key]["default"]
+                for key in variable_names
+                if key in variables["variables"]
+            }
+            return selected_variables
+        except FileNotFoundError:
+            return {}
+
+    # def instantiate_environments(self):
+    #     """Instantiate environments."""
+    #     try:
+    #         #print(f"Instantiating environments: {self.host}")
+    #         print(f"Env: {self.env}")
+    #         # print(f"Bundle target: {self.bundle_target}")
+    #         #print(f"Base URL: {self.base_url}")
+    #         self.base_url = self.host
+    #     except:
+    #         raise Exception(
+    #             f"Environment {self.env} does not match any provided host in variables.yml."
+    #         )

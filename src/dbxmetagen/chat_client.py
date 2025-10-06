@@ -1,4 +1,6 @@
 import os
+import json
+import re
 import mlflow
 import time
 from abc import ABC, abstractmethod
@@ -189,6 +191,7 @@ class DatabricksClient(ChatClient):
                 endpoint=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                max_retries=0,
             )
             .with_structured_output(response_model)
             .invoke(messages)
@@ -231,7 +234,6 @@ class OpenAISpecClient(ChatClient):
         **kwargs,
     ) -> BaseModel:
         """Create a structured completion with JSON parsing for OpenAI-compatible endpoints."""
-        import json
 
         # Add JSON formatting instruction to the messages if not already present
         if isinstance(messages, list) and messages:
@@ -250,11 +252,9 @@ class OpenAISpecClient(ChatClient):
             messages, model, max_tokens, temperature, **kwargs
         )
 
-        # Parse the JSON response
         try:
             response_text = completion.choices[0].message.content
             # Try to extract JSON from the response (in case there's extra text)
-            import re
 
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:
@@ -369,8 +369,6 @@ class CustomChatSpecClient(ChatClient):
         **kwargs,
     ) -> BaseModel:
         """Create a structured completion with JSON parsing for custom endpoints."""
-        import json
-
         # Add JSON formatting instruction to the messages if not already present
         if isinstance(messages, list) and messages:
             # Check if we already have JSON instruction
@@ -392,7 +390,6 @@ class CustomChatSpecClient(ChatClient):
         try:
             response_text = completion.choices[0].message.content
             # Try to extract JSON from the response (in case there's extra text)
-            import re
 
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             if json_match:

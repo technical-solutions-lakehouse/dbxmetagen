@@ -1,18 +1,37 @@
 import mlflow
 from src.dbxmetagen.metadata_generator import CommentGenerator
 from src.dbxmetagen.chat_client import ChatClientFactory
+from src.dbxmetagen.config import MetadataConfig
 
 
 class CommentGeneratorModel(CommentGenerator, mlflow.pyfunc.PythonModel):
+    """
+    This is a workaround to allow the config to be passed as a MetadataConfig object,
+    which is not supported by the chat client.
+    """
+
+    def __init__(self, config: MetadataConfig):
+        self.chat_client = None
+        self.config = config
+
     def load_context(self, context):
         pass
 
-    def predict(self, model_input, params=None):
-        if type(self.config) != dict:
+    def predict(self, model_input):
+        """
+        This is a workaround to allow the config to be passed as a MetadataConfig object,
+        which is not supported by the chat client.
+        """
+        if not isinstance(self.config, dict):
             self.config = self.config.__dict__
 
         # Convert dict back to MetadataConfig-like object for chat client
         class TempConfig:
+            """
+            This is a workaround to allow the config to be passed as a MetadataConfig object,
+            which is not supported by the chat client.
+            """
+
             def __init__(self, config_dict):
                 for key, value in config_dict.items():
                     setattr(self, key, value)

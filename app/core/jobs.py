@@ -833,6 +833,7 @@ class JobManager:
                 ),
                 "reviewed_metadata_file": filename,
                 "apply_changes": "true",
+                "job_id": st.session_state.job_id,
             }
 
             job_name = (

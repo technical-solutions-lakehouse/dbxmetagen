@@ -287,47 +287,15 @@ def append_column_rows(
     Returns:
         List[Row]: The updated list of rows with the new column rows appended.
     """
-    print(
-        f"[DEBUG] append_column_rows called for table: {full_table_name}, mode: {config.mode}"
-    )
-    print(f"[DEBUG] Response type: {type(response)}")
-    print(
-        f"[DEBUG] Response keys: {list(response.__dict__.keys()) if hasattr(response, '__dict__') else 'Not an object with __dict__'}"
-    )
-
-    try:
-        print(f"[DEBUG] Response.columns: {response.columns}")
-        print(
-            f"[DEBUG] Response.column_contents type: {type(response.column_contents)}"
-        )
-        print(f"[DEBUG] Number of columns: {len(response.columns)}")
-        print(f"[DEBUG] Number of column_contents: {len(response.column_contents)}")
-    except Exception as e:
-        print(f"[DEBUG] Error accessing response attributes: {e}")
-
     for i, (column_name, column_content) in enumerate(
         zip(response.columns, response.column_contents)
     ):
-        print(f"[DEBUG] Processing column {i}: {column_name}")
-        print(f"[DEBUG] Column content type: {type(column_content)}")
-        print(f"[DEBUG] Column content preview: {str(column_content)[:100]}...")
-
         if (
             isinstance(column_content, dict)
             or isinstance(column_content, PIColumnContent)
         ) and config.mode == "pi":
-            print(
-                f"[DEBUG] PI mode - processing dict/PIColumnContent for {column_name}"
-            )
             if isinstance(column_content, PIColumnContent):
                 column_content = column_content.model_dump()
-                print(f"[DEBUG] Converted PIColumnContent to dict: {column_content}")
-
-            # Check for confidence field specifically
-            if "confidence" in column_content:
-                print(
-                    f"[DEBUG] Confidence field found: type={type(column_content['confidence'])}, value={column_content['confidence']}"
-                )
 
             row = Row(
                 table=full_table_name,
@@ -336,9 +304,7 @@ def append_column_rows(
                 column_name=column_name,
                 **column_content,
             )
-            print(f"[DEBUG] Created PI Row for {column_name}")
         elif isinstance(column_content, str) and config.mode == "comment":
-            print(f"[DEBUG] Comment mode - processing string content for {column_name}")
             row = Row(
                 table=full_table_name,
                 tokenized_table=tokenized_full_table_name,
@@ -346,19 +312,11 @@ def append_column_rows(
                 column_name=column_name,
                 column_content=column_content,
             )
-            print(f"[DEBUG] Created Comment Row for {column_name}")
         else:
-            print(f"[DEBUG] ERROR: Invalid column contents type for {column_name}")
-            print(f"[DEBUG] Content type: {type(column_content)}, Mode: {config.mode}")
-            print(f"[DEBUG] Content: {column_content}")
-            raise ValueError("Invalid column contents type, should be dict or string.")
-
-        print(
-            f"[DEBUG] Row created successfully for {column_name}: {dict(row.asDict())}"
-        )
+            raise ValueError(
+                f"Invalid column contents type: {type(column_content)} for column {column_name}"
+            )
         rows.append(row)
-
-    print(f"[DEBUG] append_column_rows completed. Total rows: {len(rows)}")
     return rows
 
 
@@ -402,26 +360,7 @@ def rows_to_df(rows: List[Row], config: MetadataConfig) -> DataFrame:
     if len(rows) == 0:
         return None
     else:
-        print(
-            f"[DEBUG] Converting {len(rows)} rows to DataFrame for mode: {config.mode}"
-        )
-
-        # Sample a few rows to see what data we're working with
-        debug_print(f"[DEBUG] Sample rows being converted:", config)
-        for i, row in enumerate(rows[:3]):  # Show first 3 rows
-            print(f"  Row {i}: {dict(row.asDict())}")
-            # Check for any problematic values
-            row_dict = row.asDict()
-            for key, value in row_dict.items():
-                if value is not None and isinstance(value, str) and len(value) > 100:
-                    print(f"    WARNING: Long string in {key}: {value[:100]}...")
-                elif key == "confidence" and value is not None:
-                    print(f"    Confidence value type: {type(value)}, value: {value}")
-
         schema = define_row_schema(config)
-        print(f"[DEBUG] Using schema for mode {config.mode}:")
-        for field in schema.fields:
-            print(f"  {field.name}: {field.dataType}")
 
         # CRITICAL FIX: Force schema compliance by creating DF with schema
         # This prevents Spark from doing its own type inference that causes DOUBLE issues
@@ -1123,12 +1062,12 @@ def set_protected_classification(df: DataFrame, config: MetadataConfig) -> DataF
         df = df.withColumn(
             "classification",
             when(
-                (df["type"] == "pii")
-                | (df["type"] == "pci")
-                | (df["type"] == "medical_information")
-                | (df["type"] == "phi"),
+                (col("type") == "pii")
+                | (col("type") == "pci")
+                | (col("type") == "medical_information")
+                | (col("type") == "phi"),
                 lit("protected"),
-            ).otherwise(lit(None)),
+            ).otherwise(col("classification")),
         )
     return df
 
@@ -1145,8 +1084,8 @@ def replace_medical_information_with_phi(
     if config.mode == "pi" and eval_disable_medical_information_value(config):
         df = df.withColumn(
             "type",
-            when((df["type"] == "medical_information"), lit("phi")).otherwise(
-                lit(None)
+            when((col("type") == "medical_information"), lit("phi")).otherwise(
+                col("type")
             ),
         )
     return df
@@ -1677,11 +1616,18 @@ def create_and_persist_ddl(
         log_metadata_generation(column_df, config, table_name, base_path)
 
 
+# TODO: Update this to use get_generated_metadata_data_unaware() if sample size is 0 so Presidio can still use data.
 def get_generated_metadata(
     config: MetadataConfig, full_table_name: str
 ) -> List[Tuple[PIResponse, CommentResponse]]:
     """
-    Generates metadata for a given table. Wraps get_generated_metadata_data_aware() to allow different handling when data is allowed versus disallowed. Currently no difference is implemented between the two routes, but in the future can be if needed.
+    Generates metadata for a given table.
+    Wraps get_generated_metadata_data_aware() to allow different handling when data is allowed versus disallowed.
+    Currently no difference is implemented between the two routes, but in the future can be if needed.
+
+    The intent here is to allow Presidio to be used, or skip the query to the table if data is not allowed.
+
+    Currently, the table is still queried but with a limit of 0 rows if sample size is 0.
 
     Args:
         catalog (str): The catalog name.
@@ -1695,31 +1641,53 @@ def get_generated_metadata(
     """
     spark = SparkSession.builder.getOrCreate()
 
-    if config.sample_size == 0:
+    if int(config.sample_size) == 0:
         responses = get_generated_metadata_data_aware(spark, config, full_table_name)
-    elif config.sample_size >= 1:
+    elif int(config.sample_size) >= 1:
         responses = get_generated_metadata_data_aware(spark, config, full_table_name)
+    else:
+        raise ValueError(f"Invalid sample size: {config.sample_size}")
     return responses
 
 
 def get_generated_metadata_data_aware(
     spark: SparkSession, config: MetadataConfig, full_table_name: str
 ):
+    """
+    Generates metadata for a given table.
+
+    Args:
+        spark (SparkSession): The Spark session.
+        config (MetadataConfig): The configuration.
+        full_table_name (str): The full table name.
+
+    Returns:
+        List[Tuple[PIResponse, CommentResponse]]: A list of tuples containing the generated metadata.
+    """
     df = spark.read.table(full_table_name)
     responses = []
     nrows = df.count()
     chunked_dfs = chunk_df(df, config.columns_per_call)
-    for chunk in chunked_dfs:
+    print(
+        f"[LLM CALL DEBUG] Table has {len(df.columns)} columns, columns_per_call={config.columns_per_call}"
+    )
+    print(
+        f"[LLM CALL DEBUG] Created {len(chunked_dfs)} chunks - will make {len(chunked_dfs)} LLM calls"
+    )
+    for i, chunk in enumerate(chunked_dfs):
+        print(
+            f"[LLM CALL DEBUG] Processing chunk {i+1}/{len(chunked_dfs)} with {len(chunk.columns)} columns"
+        )
         sampled_chunk = sample_df(chunk, nrows, config.sample_size)
         prompt = PromptFactory.create_prompt(config, sampled_chunk, full_table_name)
         prompt_messages = prompt.create_prompt_template()
-        num_words = check_token_length_against_num_words(prompt_messages, config)
+        check_token_length_against_num_words(prompt_messages, config)
         if config.registered_model_name != "default":
-            call_registered_model(config, prompt)
+            chat_response = call_registered_model(config)
         else:
             chat_response = MetadataGeneratorFactory.create_generator(config)
-        response, payload = chat_response.get_responses(
-            config, prompt_messages, prompt.prompt_content
+        response, _ = chat_response.get_responses(
+            prompt_messages, prompt.prompt_content
         )
         responses.append(response)
     return responses
@@ -1732,23 +1700,27 @@ def check_token_length_against_num_words(prompt: str, config: MetadataConfig):
     num_words = len(str(prompt).split())
     if num_words > config.max_prompt_length:
         raise ValueError(
-            f"Number of words in prompt exceeds max_tokens. Please reduce the number of columns or increase max_tokens."
+            "Number of words in prompt exceeds max_tokens. Please reduce the number of columns or increase max_tokens."
         )
     else:
         return num_words
 
 
 def call_registered_model(config: MetadataConfig):
+    """
+    Calls a registered model in UC rather than a foundational model endpoint. Not yet used.
+    """
+    _ = None
     model_name = config.registered_model_name
     model_version = config.registered_model_version
     full_model_name = None
     model = mlflow.pyfunc.load_model(model_name)
     prediction = model.predict()
+    return prediction, _
 
 
 def choose_registered_model(config, df, full_table_name):
     """Will be implemented."""
-    pass
 
 
 def review_and_generate_metadata(
@@ -1843,43 +1815,49 @@ def process_and_add_ddl(config: MetadataConfig, table_name: str) -> DataFrame:
     """
     column_df, table_df = review_and_generate_metadata(config, table_name)
     column_df.count()
-    print(f"[DEBUG] column_df schema: {column_df.schema}")
-    print(f"[DEBUG] column_df count: {column_df.count()}")
     column_df = split_name_for_df(column_df)
-    print(f"[DEBUG] column_df schema after split: {column_df.schema}")
-    print(f"[DEBUG] column_df count after split: {column_df.count()}")
     column_df = hardcode_classification(column_df, config)
-    print(f"[DEBUG] column_df schema after hardcode: {column_df.schema}")
-    print(f"[DEBUG] column_df count after hardcode: {column_df.count()}")
 
     # Handle table_df which can be None in PI mode
     if table_df is not None:
         table_df = split_name_for_df(table_df)
-        print(f"[DEBUG] table_df schema after split: {table_df.schema}")
-        print(f"[DEBUG] table_df count after split: {table_df.count()}")
         table_df = hardcode_classification(table_df, config)
-    else:
-        print(
-            f"[DEBUG] table_df is None (expected in PI mode) - skipping table-level processing"
-        )
     if config.allow_manual_override:
         logger.info("Overriding metadata from CSV...")
         column_df = override_metadata_from_csv(
             column_df, config.override_csv_path, config
         )
-        print(f"[DEBUG] column_df schema after override: {column_df.schema}")
-        print(f"[DEBUG] column_df count after override: {column_df.count()}")
     dfs = add_ddl_to_dfs(config, table_df, column_df, table_name)
     return dfs
 
 
+# TODO: figure out where the pi column classsification is getting messed up, its being set to None every time.
 def hardcode_classification(df, config):
+    """
+    Hardcodes the classification for the DataFrame.
+
+    Args:
+        df (DataFrame): The DataFrame to hardcode the classification for.
+        config (MetadataConfig): The configuration object.
+
+    Returns:
+        DataFrame: The DataFrame with the classification hardcoded.
+    """
     df = replace_medical_information_with_phi(df, config)
     df = set_protected_classification(df, config)
     return df
 
 
 def split_name_for_df(df):
+    """
+    Splits the fully scoped table name for the DataFrame.
+
+    Args:
+        df (DataFrame): The DataFrame to split the fully scoped table name for.
+
+    Returns:
+        DataFrame: The DataFrame with the fully scoped table name split.
+    """
     if df is not None:
         # CRITICAL SERVERLESS FIX: Preserve column_content type during table name splitting
         has_column_content = "column_content" in df.columns
@@ -1911,6 +1889,7 @@ def split_name_for_df(df):
     return df
 
 
+# TODO: Figure out where the pi table classification is getting messed up, the DDL isn't being written to a df.
 def add_ddl_to_dfs(config, table_df, column_df, table_name):
     dfs = {}
     if config.mode == "comment":
@@ -2025,10 +2004,30 @@ def add_ddl_to_dfs(config, table_df, column_df, table_name):
         if config.apply_ddl:
             apply_ddl_to_tables(dfs, config)
     elif config.mode == "pi":
+        print(f"[DEBUG] Starting add_ddl_to_dfs for pi mode")
+        print(f"[DEBUG] column_df schema: {column_df.schema}")
+        display(column_df)
         dfs["pi_column_df"] = add_column_ddl_to_pi_df(config, column_df, "ddl")
+        print(f"[DEBUG] pi_column_df schema: {dfs['pi_column_df'].schema}")
+        display(dfs["pi_column_df"])
         table_df = create_pi_table_df(dfs["pi_column_df"], table_name, config)
+        print(f"[DEBUG] create_pi_table_df returned: {table_df}")
         if table_df is not None:
-            dfs["pi_table_df"] = set_protected_classification(table_df, config)
+            print(f"[DEBUG] table_df count before set_protected: {table_df.count()}")
+            table_df.show(truncate=False)
+            table_df = set_protected_classification(table_df, config)
+            print(f"[DEBUG] table_df count after set_protected: {table_df.count()}")
+            table_df.show(truncate=False)
+            table_df = add_table_ddl_to_pi_df(table_df, "ddl")
+            print(f"[DEBUG] table_df count after add_ddl: {table_df.count()}")
+            table_df.show(truncate=False)
+            dfs["pi_table_df"] = table_df
+            print(f"[DEBUG] pi_table_df schema: {dfs['pi_table_df'].schema}")
+            display(dfs["pi_table_df"])
+        else:
+            print(
+                f"[DEBUG] WARNING: table_df is None! No table-level DDL will be generated!"
+            )
         if config.apply_ddl:
             apply_ddl_to_tables(dfs, config)
     else:
@@ -2065,16 +2064,18 @@ def create_pi_table_df(
     Returns:
         DataFrame: A DataFrame with PI information at the table level.
     """
-    pi_rows = column_df.filter(col("type").isNotNull())
+    pi_rows = column_df.filter((col("type").isNotNull()) & (col("type") != "None"))
     # Use first() instead of collect() for single aggregate values
     max_confidence = pi_rows.agg(spark_max("confidence")).first()[0]
     table_subclassification = determine_table_classification(pi_rows)
+    print("\n\ntable_subclassification:\n", table_subclassification)
     if config.use_protected_classification_for_table:
         table_classification = get_protected_classification_for_table(
             table_subclassification
         )
     else:
         table_classification = table_subclassification
+    print("\n\ntable_subclassification:\n", table_subclassification)
     table_name = table_name.split(".")[-1]
     print("table_classification", table_classification)
     print("table_subclassification", table_subclassification)
@@ -2092,8 +2093,9 @@ def create_pi_table_df(
         .withColumn("table_name", lit(table_name))
     )
     print("pi_table_row", pi_table_row.show())
-    pi_table_row = add_table_ddl_to_pi_df(pi_table_row, "ddl")
-    return pi_table_row.select(column_df.columns)
+    # Ensure we have all necessary columns before returning
+    # The dataframe has: catalog, schema, table, type, ddl_type, confidence, column_name, classification, table_name
+    return pi_table_row
 
 
 def determine_table_classification(pi_rows: DataFrame) -> str:
@@ -2211,7 +2213,7 @@ def create_tables(config: MetadataConfig) -> None:
         formatted_control_table = get_control_table(config)
         logger.info("Formatted control table...", formatted_control_table)
         spark.sql(
-            f"""CREATE TABLE IF NOT EXISTS {config.catalog_name}.{config.schema_name}.{formatted_control_table} (table_name STRING, _updated_at TIMESTAMP, _deleted_at TIMESTAMP)"""
+            f"""CREATE TABLE IF NOT EXISTS {config.catalog_name}.{config.schema_name}.{formatted_control_table} (table_name STRING, _updated_at TIMESTAMP, _deleted_at TIMESTAMP, _job_id STRING)"""
         )
 
 
@@ -2446,6 +2448,7 @@ def upsert_table_names_to_control_table(
         table_names_df.join(existing_df, on="table_name", how="left_anti")
         .withColumn("_updated_at", current_timestamp())
         .withColumn("_deleted_at", lit(None).cast(TimestampType()))
+        .withColumn("_job_id", lit(config.job_id))
     )
     if new_table_names_df.count() > 0:
         new_table_names_df.write.format("delta").mode("append").saveAsTable(
@@ -2676,6 +2679,8 @@ def _create_column_comment_ddl_func():
         else:
             try:
                 dbr_version = float(dbr_number)
+                if dbr_version is None:
+                    raise ValueError(f"Databricks runtime version is None")
                 if dbr_version >= 16:
                     ddl_statement = f"""COMMENT ON COLUMN {full_table_name}.`{column_name}` IS "{comment}";"""
                 elif dbr_version >= 14 and dbr_version < 16:

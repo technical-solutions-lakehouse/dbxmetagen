@@ -31,6 +31,7 @@ from src.dbxmetagen.databricks_utils import (
     setup_widgets,
     setup_notebook_variables,
 )
+from src.dbxmetagen.config import MetadataConfig
 
 # COMMAND ----------
 # MAGIC %md
@@ -38,8 +39,10 @@ from src.dbxmetagen.databricks_utils import (
 # COMMAND ----------
 setup_widgets(dbutils)
 # COMMAND ----------
-# Get widget values and set up environment
-# COMMAND ----------
-notebook_variables = setup_notebook_variables(dbutils)
+try:
+    job_id = dbutils.widgets.get("job_id")
+except ValueError as e:
+    job_id = None
+notebook_variables = setup_notebook_variables(dbutils, job_id)
 # COMMAND ----------
 main(notebook_variables)
