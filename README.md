@@ -1,5 +1,7 @@
 # dbxmetagen: GenAI-Assisted Metadata Generation for Databricks
 
+# Archived - go to https://github.com/databricks-industry-solutions/dbxmetagen
+
 ## Expanded Documentation with Full Variable Reference
 
 This document provides a comprehensive guide to **dbxmetagen**, integrating all information from the original README and expanding it with details from the `variables.yml` configuration. Every option, workflow, and advanced usage pattern is included to ensure full transparency and control for users.
